@@ -86,22 +86,19 @@
     }
 
     let playing = false;
-    let playOffset = 0.5;
 
+    let audioMethod = null;
     function setAudio(method) {
         const elements = Object.fromEntries(
             ['dhondt', 'sainte-lague', 'hare']
                 .map((method) => [method, document.getElementById(`h-${method}`)])
         );
         Object.values(elements).forEach((el) => el.innerText = el.innerText.replace(" 🔊", ""));
-        elements[method].innerText += " 🔊";
-
-        if (method == "dhondt") {
-            playOffset = 0;
-        } else if (method == "sainte-lague") {
-            playOffset = 0.5;
-        } else if (method == "hare") {
-            playOffset = "hare";
+        if (audioMethod == method) {
+            audioMethod = null;
+        } else {
+            audioMethod = method;
+            elements[audioMethod].innerText += " 🔊";
         }
     }
 
@@ -226,7 +223,10 @@
             middle_text.textContent = `t = ${t.toFixed(2)}`;
 
             runners.forEach(({ set_position, track, speed, name, color, position, note }, i) => {
-                if (playOffset != "hare" && Math.floor(t * speed + playOffset) > Math.floor(position + playOffset) && playing) {
+                if (playing && 
+                    (audioMethod == "dhondt" && Math.floor(t * speed) > Math.floor(position)) ||
+                    (audioMethod == "sainte-lague" && Math.round(t * speed) > Math.round(position))
+                ) {
                     playSample(note);
                 }
                 set_position(t * speed);
@@ -258,7 +258,9 @@
             function updateHare() {
                 const total = runners.map(({ speed }) => Math.floor(speed * t)).reduce((a, b) => a + b, 0);
                 const missing = Math.floor(t - total);
-                runners.toSorted((a, b) => b.speed * t % 1 - a.speed * t % 1).forEach(({ color, speed, name, note }, i) => {
+                const cloned_runners = [...runners];
+                cloned_runners.sort((a, b) => (b.speed * t % 1) - (a.speed * t % 1));
+                cloned_runners.forEach(({ color, speed, name, note }, i) => {
                     const element = document.getElementById(`hare-${name}`);
                     element.style.top = `${getHareY(i)}px`;
                     const extra_seats = i < missing ? 1 : 0;
@@ -268,7 +270,7 @@
                     element.querySelector(".bar").style.width = `${(speed * t % 1 * 100)}%`;
                     element.querySelector(".bar").style.height = `${i < missing ? 8 : 2}px`;
 
-                    if (playOffset == "hare" && playing) {
+                    if (audioMethod == "hare" && playing) {
                         if (hareLast[name] < base_seats + extra_seats) {
                             playSample(note);
                         } else if (hareLast[name] > base_seats + extra_seats) {
@@ -320,7 +322,7 @@
             time += delta * (Math.pow(parseFloat(speed.value), 2) / 2); // speed of slider movement
             if (time > max) {
                 playing = false;
-                play.value = playing ? "⏸" : "⏵";
+                play.value = playing ? "pause" : "start";
                 return;
             }
             set_time(time);
@@ -331,7 +333,7 @@
         play.addEventListener("click", () => {
             initializeAudioCtx();
             playing = !playing;
-            play.value = playing ? "⏸" : "⏵";
+            play.value = playing ? "pause" : "start";
 
             if (playing) {
                 lastTime = performance.now();
@@ -459,7 +461,7 @@
 <body>
     <svg id="track"></svg>
     <div class="h">
-        <input type="button" value="⏵" id="play">
+        <input type="button" value="start" id="play" style="font-family: monospace;">
         t =<input type="range" min="0" max="650" step="0.00001" value="0" id="slider">
         <input type="range" orient="vertical" min="0.1" max="10" step="0.00001" value="1.41" id="speed">
     </div>
@@ -471,7 +473,7 @@
             </div>
         </div>
         <div style="border: 3px dotted;">
-            <h2 id="h-sainte-lague" onclick="setAudio('sainte-lague')">Sainte-Laguë (Webster) 🔊</h2>
+            <h2 id="h-sainte-lague" onclick="setAudio('sainte-lague')">Sainte-Laguë (Webster)</h2>
             <div id="output-sainte-lague" class="output-divisor">
 
             </div>
