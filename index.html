@@ -85,8 +85,6 @@
         return bytes.buffer;
     }
 
-
-
     let playing = false;
     let playOffset = 0.5;
 
@@ -288,10 +286,10 @@
         window.onkeydown = (event) => {
             if (event.key === "ArrowRight") {
                 slider.value = Math.min(parseFloat(slider.value) + 1, parseFloat(slider.max));
-                set_time(parseFloat(slider.value));
+                set_time(Math.round(parseFloat(slider.value)));
             } else if (event.key === "ArrowLeft") {
                 slider.value = Math.max(parseFloat(slider.value) - 1, parseFloat(slider.min));
-                set_time(parseFloat(slider.value));
+                set_time(Math.round(parseFloat(slider.value)));
             } else if (event.key === "ArrowUp") {
                 speed.value = Math.min(parseFloat(speed.value) + 0.2, parseFloat(speed.max));
             } else if (event.key === "ArrowDown") {
