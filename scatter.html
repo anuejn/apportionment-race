@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+
+<title>BTW2025 Scatter Plot</title>
+
+<div>
+    <canvas id="chart"></canvas>
+    <button id="swap">🗘</button>
+    <select id="y"></select>
+    <select id="x"></select>
+    <select id="z">
+        <option value="none">none</option>
+    </select>
+</div>
+
+<style>
+    html,
+    body,
+    body>div {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    #y {
+        writing-mode: sideways-lr;
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        left: 5px;
+    }
+
+    #x {
+        position: absolute;
+        bottom: 5px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    #z {
+        position: absolute;
+        right: 40px;
+        top: 50px;
+        opacity: 0.4;
+        width: 150px;
+        transition: opacity 0.5s;
+    }
+
+    #z:hover {
+        opacity: 1;
+    }
+
+
+    #chart {
+        margin-left: 40px;
+        margin-bottom: 40px;
+        height: 100%;
+        width: 100%;
+    }
+
+    #swap {
+        position: absolute;
+        left: 10px;
+        bottom: 0px;
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: none;
+        font-size: 18px;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    const party_colors = {
+        "CDU": "#161A1D",
+        "AfD": "#009EE0",
+        "SPD": "#E3010F",
+        "GRÜNE": "#64A12D",
+        "DIE LINKE": "#BE3075",
+        "CSU": "#777",
+        "SSW": 'rgb(0, 48, 114)',
+    }
+</script>
+
+<script>
+    changequote([[[[[[,]]]]]])
+
+    const data = include(btw_2025_strukturdaten_ergebnisse.json);
+    const ctx = document.getElementById('chart');
+
+    const axis = ["x", "y", "z"]
+
+    Object.entries(data[0]).forEach(([k, v]) => {
+        const option = `<option value="${k}">${k}</option>`;
+        if (typeof v != "string") {
+            ["x", "y"].forEach(([axis]) =>
+                document.getElementById(axis).innerHTML += option)
+        } else {
+            z.innerHTML += option;
+        }
+    });
+
+    const url = new URL(window.location);
+    axis.forEach(axis => {
+        const v = url.searchParams.get(axis);
+        document.getElementById(axis).value = v;
+    })
+
+    const chart = new Chart(ctx, {
+        type: 'scatter',
+        options: {
+            maintainAspectRatio: false,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: (item) => {
+                            return [
+                                `${item.raw.label}`,
+                                `${x.value}: ${item.raw.x}`,
+                                `${y.value}: ${item.raw.y}`,
+                                ...(item.raw.z ? [`${z.value}: ${item.raw.z}`] : [])
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    function updateChart() {
+        if (!z.value || z.value == "none") {
+            chart.data.datasets = [{
+                label: 'Wahlkreis',
+                data: data.map(wk => ({
+                    x: wk[x.value],
+                    y: wk[y.value],
+                    label: `${wk['Name']} (${wk['Nr']})`
+                })),
+            }];
+            chart.options.plugins.legend.display = false;
+        } else if (typeof data[0][z.value] == "string") {
+            // enum like thing
+            const options = {};
+            data.forEach(wk => {
+                if (!options[wk[z.value]]) options[wk[z.value]] = [];
+                options[wk[z.value]].push(
+                    {
+                        x: wk[x.value],
+                        y: wk[y.value],
+                        z: wk[z.value],
+                        label: `${wk['Name']} (${wk['Nr']})`
+                    }
+                )
+            })
+            chart.data.datasets = Object.entries(options).map(([k, v]) => ({
+                label: k,
+                data: v,
+                ...(party_colors[k] ? { backgroundColor: party_colors[k] } : {})
+            }))
+            chart.options.plugins.legend.display = true;
+        }
+
+        // if the middle of the chart is more than 40% to the right of the mean, we use a log scale
+        ["x", "y"].forEach(ax => {
+            const ax_str = document.getElementById(ax).value;
+            const ax_data = data.map(wk => wk[ax_str]);
+            const ax_min = Math.min(...ax_data);
+            const ax_max = Math.max(...ax_data);
+            const ax_middle = ax_min + (ax_max - ax_min) / 2;
+            const ax_mean = ax_data.reduce((a, b) => a + b) / ax_data.length;
+            const percent_diff = (ax_mean - ax_middle) / ax_middle * 100;
+            console.log(ax_str, percent_diff)
+
+            if (percent_diff < -40) {
+                chart.options.scales[ax].type = 'logarithmic';
+            } else {
+                chart.options.scales[ax].type = 'linear';
+            }
+        })
+
+        chart.update();
+    }
+    updateChart();
+
+    function changeAxis() {
+        const queryString = axis.map(a => `${a}=${encodeURIComponent(document.getElementById(a).value)}`).join("&")
+        window.history.replaceState({}, "", `${url.protocol}//${url.host}${url.pathname}?${queryString}`);
+        updateChart();
+    }
+    axis.forEach(a => document.getElementById(a).addEventListener('change', changeAxis))
+
+    swap.addEventListener("click", () => {
+        [x.value, y.value] = [y.value, x.value];
+        changeAxis();
+    })
+
+</script>
