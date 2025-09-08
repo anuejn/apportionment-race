@@ -2,346 +2,6 @@
 
 <title>Runner Model</title>
 
-<script>
-    const [width, height] = [400.1, 400];
-    const parties = [
-        { name: "CDU", color: "#161A1D", n: 11196374, note: 17 },
-        { name: "AfD", color: "#009EE0", n: 10328780, note: 12 },
-        { name: "SPD", color: "#E3010F", n: 8149124, note: 8 },
-        { name: "GRÜNE", color: "#64A12D", n: 5762380, note: 5 },
-        { name: "LINKE", color: "#BE3075", n: 4356532, note: 0 },
-        { name: "CSU", color: "#777", n: 2964028, note: -7 },
-        { name: "SSW", color: 'rgb(0, 48, 114)', n: 76138, note: -12 },
-    ]
-
-    function pointOnOval(width, height, distance) {
-        // Oval: top and bottom are straight lines, sides are semicircles
-        // Start at top middle, go clockwise
-        const r = (height - (width > height ? 0 : width)) / 2;
-        const straightLen = width - 2 * r;
-        const semiLen = Math.PI * r;
-        const totalLen = 2 * straightLen + 2 * semiLen;
-
-        let d = (distance * totalLen) % totalLen;
-
-        // Top straight
-        if (d <= straightLen / 2) {
-            return { x: width / 2 + d, y: 0 };
-        }
-        d -= straightLen / 2;
-
-        // Right semicircle (top to bottom)
-        if (d <= semiLen) {
-            const theta = (d / semiLen) * Math.PI; // 0 to PI
-            return {
-                x: width - r + r * Math.cos(theta - Math.PI / 2),
-                y: r + r * Math.sin(theta - Math.PI / 2)
-            };
-        }
-        d -= semiLen;
-
-        // Bottom straight (right to left)
-        if (d <= straightLen) {
-            return { x: width - (height / 2) - d, y: height };
-        }
-        d -= straightLen;
-
-        // Left semicircle (bottom to top)
-        if (d <= semiLen) {
-            const theta = (d / semiLen) * Math.PI; // 0 to PI
-            return {
-                x: r + r * Math.cos(theta + Math.PI / 2),
-                y: height - r + r * Math.sin(theta + Math.PI / 2)
-            };
-        }
-        d -= semiLen;
-
-        // Top straight left half
-        return { x: (height / 2) + d, y: 0 };
-    }
-
-    let context = null;
-    let sample = null;
-    async function initializeAudioCtx() {
-        context = new AudioContext();
-        sample = await context.decodeAudioData(base64ToArrayBuffer(sound_str));
-    }
-
-    function playSample(noteToPlay) {
-        if (!context || !sample) return;
-        const source = context.createBufferSource();
-        source.buffer = sample;
-        source.playbackRate.value = 2 ** (noteToPlay / 12);
-        source.connect(context.destination);
-        source.start(0);
-    }
-
-    function base64ToArrayBuffer(base64) {
-        var binaryString = atob(base64);
-        var bytes = new Uint8Array(binaryString.length);
-        for (var i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-        return bytes.buffer;
-    }
-
-    let playing = false;
-
-    let audioMethod = null;
-    function setAudio(method) {
-        const elements = Object.fromEntries(
-            ['dhondt', 'sainte-lague', 'hare']
-                .map((method) => [method, document.getElementById(`h-${method}`)])
-        );
-        Object.values(elements).forEach((el) => el.innerText = el.innerText.replace(" 🔊", ""));
-        if (audioMethod == method) {
-            audioMethod = null;
-        } else {
-            audioMethod = method;
-            elements[audioMethod].innerText += " 🔊";
-        }
-    }
-
-    window.addEventListener("load", () => {
-        const svg = document.getElementById("track");
-        svg.setAttribute("width", width + 20);
-        svg.setAttribute("height", height + 20);
-
-        const p = (pos) => {
-            let { x, y } = pointOnOval(width, height, pos);
-            x += 10;
-            y += 10;
-            return { x, y };
-        }
-
-        function generatePath(v) {
-            let track_path = "";
-            for (let pos = 0; pos <= v; pos += 0.01) {
-                let { x, y } = p(pos);
-                track_path += `${pos === 0 ? "M" : "L"} ${x} ${y} `;
-            }
-
-            let { x, y } = p(v);
-            track_path += `L ${x} ${y} `;
-            if (v >= 1) {
-                track_path += "Z";
-            }
-            return track_path;
-        }
-
-        function drawTrack(v) {
-            const track = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            track.setAttribute("d", generatePath(v));
-            track.setAttribute("stroke", "black");
-            track.setAttribute("fill", "none");
-            svg.appendChild(track);
-            return track;
-        }
-        drawTrack(1);
-        let hover_track = drawTrack(0);
-        hover_track.setAttribute("stroke-width", "0");
-        hover_track.style.transition = "stroke-width 0.5s ease-in-out";
-
-        function draw_tick(pos, dasharray) {
-            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            let { x, y } = p(pos);
-            line.setAttribute("x1", x);
-            line.setAttribute("y1", y - 10);
-            line.setAttribute("x2", x);
-            line.setAttribute("y2", y + 10);
-            line.setAttribute("stroke", "black");
-            line.setAttribute("stroke-width", "2");
-            line.setAttribute("stroke-dasharray", dasharray);
-            svg.appendChild(line);
-        }
-
-        draw_tick(0, "6.5");
-        draw_tick(0.5, "2");
-
-        const middle_text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        middle_text.setAttribute("x", "50%");
-        middle_text.setAttribute("y", "50%");
-        middle_text.setAttribute("dominant-baseline", "middle");
-        middle_text.setAttribute("text-anchor", "middle");
-        svg.appendChild(middle_text);
-
-        let total_votes = parties.reduce((sum, party) => sum + party.n, 0);
-
-        let runners = parties.map((party) => {
-            const speed = party.n / total_votes;
-            const runner = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            runner.setAttribute("r", 5);
-            runner.setAttribute("fill", party.color);
-            runner.setAttribute("title", party.name);
-            svg.appendChild(runner);
-            const toReturn = { speed, position: 0, ...party };
-            const set_position = (pos) => {
-                toReturn.position = pos;
-                let { x, y } = p(pos);
-                runner.setAttribute("cx", x);
-                runner.setAttribute("cy", y);
-            };
-            toReturn.set_position = set_position;
-            return toReturn;
-        });
-
-        let hover = null;
-        let set_time = (t) => { };
-
-        const output_hare = document.getElementById("output-hare");
-        function getHareY(x) { return x * 25 + 10; }
-        function createHare() {
-            runners.forEach(({ color, speed, name }, i) => {
-                output_hare.innerHTML += `
-                    <div id="hare-${name}" style="top: ${getHareY(i)}px;">
-                        <span class="number" style="width: 4em">${name}:
-                        </span> <span class="number base-seats">0</span>
-                        +<span class="number extra-seats">0</span>
-                        <div style="flex-grow: 1;">
-                            <div class="dot bar" style="background-color: ${color}"></div>
-                        </div>
-                    </div>
-                `;
-            });
-            output_hare.style.height = `${getHareY(runners.length - 1) + 10}px`;
-            [...output_hare.children].forEach((element, i) => {
-                element.addEventListener("mouseenter", () => {
-                    hover = runners[i].name;
-                    set_time(parseFloat(slider.value));
-                });
-                element.addEventListener("mouseleave", () => {
-                    hover = null;
-                    set_time(parseFloat(slider.value));
-                });
-            });
-        }
-        createHare()
-
-        const hareLast = Object.fromEntries(runners.map(({ name }) => [name, 0]));
-        set_time = (t) => {
-            slider.value = t;
-            middle_text.textContent = `t = ${t.toFixed(2)}`;
-
-            runners.forEach(({ set_position, track, speed, name, color, position, note }, i) => {
-                if (playing && 
-                    (audioMethod == "dhondt" && Math.floor(t * speed) > Math.floor(position)) ||
-                    (audioMethod == "sainte-lague" && Math.round(t * speed) > Math.round(position))
-                ) {
-                    playSample(note);
-                }
-                set_position(t * speed);
-                if (hover == name) {
-                    hover_track.setAttribute("d", generatePath(speed * t % 1));
-                    hover_track.setAttribute("stroke", color);
-                    hover_track.setAttribute("stroke-width", "5");
-                }
-            });
-            if (hover == null) {
-                hover_track.setAttribute("stroke-width", "0");
-            }
-
-            function updateOutputDivisor(id, x) {
-                const output = document.getElementById(id);
-                html = "";
-                let total = 0;
-                runners.forEach(({ color, speed, name }, i) => {
-                    const rounds = Math.floor(speed * t + x);
-                    html += `<div><div class="dot" style="background-color: ${color}"></div>${name}: <span class="number">${rounds}</span></div>`;
-                    total += rounds;
-                });
-                html += `<div>Total: <span class="number">${total}</span></div>`;
-                output.innerHTML = html;
-            }
-            updateOutputDivisor("output-sainte-lague", 0.5);
-            updateOutputDivisor("output-dhondt", 0);
-
-            function updateHare() {
-                const total = runners.map(({ speed }) => Math.floor(speed * t)).reduce((a, b) => a + b, 0);
-                const missing = Math.floor(t - total);
-                const cloned_runners = [...runners];
-                cloned_runners.sort((a, b) => (b.speed * t % 1) - (a.speed * t % 1));
-                cloned_runners.forEach(({ color, speed, name, note }, i) => {
-                    const element = document.getElementById(`hare-${name}`);
-                    element.style.top = `${getHareY(i)}px`;
-                    const extra_seats = i < missing ? 1 : 0;
-                    const base_seats = Math.floor(speed * t);
-                    element.querySelector(".base-seats").textContent = base_seats;
-                    element.querySelector(".extra-seats").textContent = extra_seats;
-                    element.querySelector(".bar").style.width = `${(speed * t % 1 * 100)}%`;
-                    element.querySelector(".bar").style.height = `${i < missing ? 8 : 2}px`;
-
-                    if (audioMethod == "hare" && playing) {
-                        if (hareLast[name] < base_seats + extra_seats) {
-                            playSample(note);
-                        } else if (hareLast[name] > base_seats + extra_seats) {
-                            console.log("loose")
-                            playSample(note - 1);
-                        }
-                    }
-                    hareLast[name] = base_seats + extra_seats;
-                });
-            }
-            updateHare()
-
-        };
-
-        window.onkeydown = (event) => {
-            if (event.key === "ArrowRight") {
-                slider.value = Math.min(parseFloat(slider.value) + 1, parseFloat(slider.max));
-                set_time(Math.round(parseFloat(slider.value)));
-            } else if (event.key === "ArrowLeft") {
-                slider.value = Math.max(parseFloat(slider.value) - 1, parseFloat(slider.min));
-                set_time(Math.round(parseFloat(slider.value)));
-            } else if (event.key === "ArrowUp") {
-                speed.value = Math.min(parseFloat(speed.value) + 0.2, parseFloat(speed.max));
-            } else if (event.key === "ArrowDown") {
-                speed.value = Math.max(parseFloat(speed.value) - 0.2, parseFloat(speed.min));
-            } else if (event.key === " ") {
-                play.click();
-                event.preventDefault();
-            }
-        };
-
-        slider.addEventListener("input", (event) => {
-            let time = event.target.value;
-            set_time(parseFloat(time));
-        });
-        set_time(parseFloat(slider.value));
-
-        const play = document.getElementById("play");
-
-        let lastTime = null;
-        function playAnimation() {
-            if (!playing) return;
-            const currentTime = performance.now();
-            const delta = (currentTime - lastTime) / 1000; // seconds
-            lastTime = currentTime;
-
-            let time = parseFloat(slider.value);
-            let max = parseFloat(slider.max);
-            time += delta * (Math.pow(parseFloat(speed.value), 2) / 2); // speed of slider movement
-            if (time > max) {
-                playing = false;
-                play.value = playing ? "pause" : "start";
-                return;
-            }
-            set_time(time);
-
-            requestAnimationFrame(playAnimation);
-        }
-
-        play.addEventListener("click", () => {
-            initializeAudioCtx();
-            playing = !playing;
-            play.value = playing ? "pause" : "start";
-
-            if (playing) {
-                lastTime = performance.now();
-                playAnimation();
-            }
-        });
-    });
-</script>
 
 <style>
     * {
@@ -486,6 +146,367 @@
         </div>
     </div>
 </body>
+
+
+<script>
+    const [width, height] = [400.1, 400];
+    const parties = [
+        { name: "CDU", color: "#161A1D", n: 11196374, note: 17 },
+        { name: "AfD", color: "#009EE0", n: 10328780, note: 12 },
+        { name: "SPD", color: "#E3010F", n: 8149124, note: 8 },
+        { name: "GRÜNE", color: "#64A12D", n: 5762380, note: 5 },
+        { name: "LINKE", color: "#BE3075", n: 4356532, note: 0 },
+        { name: "CSU", color: "#777", n: 2964028, note: -7 },
+        { name: "SSW", color: 'rgb(0, 48, 114)', n: 76138, note: -12 },
+    ]
+
+    function pointOnOval(width, height, distance) {
+        // Oval: top and bottom are straight lines, sides are semicircles
+        // Start at top middle, go clockwise
+        const r = (height - (width > height ? 0 : width)) / 2;
+        const straightLen = width - 2 * r;
+        const semiLen = Math.PI * r;
+        const totalLen = 2 * straightLen + 2 * semiLen;
+
+        let d = (distance * totalLen) % totalLen;
+
+        // Top straight
+        if (d <= straightLen / 2) {
+            return { x: width / 2 + d, y: 0 };
+        }
+        d -= straightLen / 2;
+
+        // Right semicircle (top to bottom)
+        if (d <= semiLen) {
+            const theta = (d / semiLen) * Math.PI; // 0 to PI
+            return {
+                x: width - r + r * Math.cos(theta - Math.PI / 2),
+                y: r + r * Math.sin(theta - Math.PI / 2)
+            };
+        }
+        d -= semiLen;
+
+        // Bottom straight (right to left)
+        if (d <= straightLen) {
+            return { x: width - (height / 2) - d, y: height };
+        }
+        d -= straightLen;
+
+        // Left semicircle (bottom to top)
+        if (d <= semiLen) {
+            const theta = (d / semiLen) * Math.PI; // 0 to PI
+            return {
+                x: r + r * Math.cos(theta + Math.PI / 2),
+                y: height - r + r * Math.sin(theta + Math.PI / 2)
+            };
+        }
+        d -= semiLen;
+
+        // Top straight left half
+        return { x: (height / 2) + d, y: 0 };
+    }
+
+    let context = null;
+    let sample = null;
+    async function initializeAudioCtx() {
+        context = new AudioContext();
+        sample = await context.decodeAudioData(base64ToArrayBuffer(sound_str));
+    }
+
+    function playSample(noteToPlay) {
+        if (!context || !sample) return;
+        const source = context.createBufferSource();
+        source.buffer = sample;
+        source.playbackRate.value = 2 ** (noteToPlay / 12);
+        source.connect(context.destination);
+        source.start(0);
+    }
+
+    function base64ToArrayBuffer(base64) {
+        var binaryString = atob(base64);
+        var bytes = new Uint8Array(binaryString.length);
+        for (var i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    let playing = false;
+
+    let audioMethod = null;
+    function setAudio(method) {
+        const elements = Object.fromEntries(
+            ['dhondt', 'sainte-lague', 'hare']
+                .map((method) => [method, document.getElementById(`h-${method}`)])
+        );
+        Object.values(elements).forEach((el) => el.innerText = el.innerText.replace(" 🔊", ""));
+        if (audioMethod == method) {
+            audioMethod = null;
+        } else {
+            audioMethod = method;
+            elements[audioMethod].innerText += " 🔊";
+        }
+    }
+
+    const svg = document.getElementById("track");
+    svg.setAttribute("width", width + 20);
+    svg.setAttribute("height", height + 20);
+
+    const p = (pos) => {
+        let { x, y } = pointOnOval(width, height, pos);
+        x += 10;
+        y += 10;
+        return { x, y };
+    }
+
+    function generatePath(v) {
+        let track_path = "";
+        for (let pos = 0; pos <= v; pos += 0.01) {
+            let { x, y } = p(pos);
+            track_path += `${pos === 0 ? "M" : "L"} ${x} ${y} `;
+        }
+
+        let { x, y } = p(v);
+        track_path += `L ${x} ${y} `;
+        if (v >= 1) {
+            track_path += "Z";
+        }
+        return track_path;
+    }
+
+    function drawTrack(v) {
+        const track = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        track.setAttribute("d", generatePath(v));
+        track.setAttribute("stroke", "black");
+        track.setAttribute("fill", "none");
+        svg.appendChild(track);
+        return track;
+    }
+    drawTrack(1);
+    let hover_track = drawTrack(0);
+    hover_track.setAttribute("stroke-width", "0");
+    hover_track.style.transition = "stroke-width 0.5s ease-in-out";
+
+    function draw_tick(pos, dasharray) {
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        let { x, y } = p(pos);
+        line.setAttribute("x1", x);
+        line.setAttribute("y1", y - 10);
+        line.setAttribute("x2", x);
+        line.setAttribute("y2", y + 10);
+        line.setAttribute("stroke", "black");
+        line.setAttribute("stroke-width", "2");
+        line.setAttribute("stroke-dasharray", dasharray);
+        svg.appendChild(line);
+    }
+
+    draw_tick(0, "6.5");
+    draw_tick(0.5, "2");
+
+    const middle_text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    middle_text.setAttribute("x", "50%");
+    middle_text.setAttribute("y", "50%");
+    middle_text.setAttribute("dominant-baseline", "middle");
+    middle_text.setAttribute("text-anchor", "middle");
+    svg.appendChild(middle_text);
+
+    let total_votes = parties.reduce((sum, party) => sum + party.n, 0);
+
+    let runners = parties.map((party) => {
+        const speed = party.n / total_votes;
+        const runner = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        runner.setAttribute("r", 5);
+        runner.setAttribute("fill", party.color);
+        runner.setAttribute("title", party.name);
+        runner.classList.add(party.name);
+        runner.classList.add("party");
+        svg.appendChild(runner);
+        const toReturn = { speed, position: 0, ...party };
+        const set_position = (pos) => {
+            toReturn.position = pos;
+            let { x, y } = p(pos);
+            runner.setAttribute("cx", x);
+            runner.setAttribute("cy", y);
+        };
+        toReturn.set_position = set_position;
+        return toReturn;
+    });
+
+    let hover = null;
+    let set_time = (t) => { };
+
+    const output_hare = document.getElementById("output-hare");
+    function getHareY(x) { return x * 25 + 10; }
+    function createHare() {
+        runners.forEach(({ color, speed, name }, i) => {
+            output_hare.innerHTML += `
+                    <div id="hare-${name}" class="${name} party" style="top: ${getHareY(i)}px;">
+                        <span class="number" style="width: 4em">${name}:
+                        </span> <span class="number base-seats">0</span>
+                        +<span class="number extra-seats">0</span>
+                        <div style="flex-grow: 1;">
+                            <div class="dot bar" style="background-color: ${color}"></div>
+                        </div>
+                    </div>
+                `;
+        });
+        output_hare.style.height = `${getHareY(runners.length - 1) + 10}px`;
+        [...output_hare.children].forEach((element, i) => {
+            element.addEventListener("mouseenter", () => {
+                hover = runners[i].name;
+                set_time(parseFloat(slider.value));
+            });
+            element.addEventListener("mouseleave", () => {
+                hover = null;
+                set_time(parseFloat(slider.value));
+            });
+        });
+    }
+    createHare()
+
+    function createOutputDivisor(id) {
+        const output = document.getElementById(id);
+        html = "";
+        let total = 0;
+        runners.forEach(({ color, speed, name }, i) => {
+            html += `<div class="${name} party"><div class="dot" style="background-color: ${color}"></div>${name}: <span class="number">0</span></div>`;
+        });
+        html += `<div class="total">Total: <span class="number">0</span></div>`;
+        output.innerHTML = html;
+    }
+    createOutputDivisor("output-sainte-lague");
+    createOutputDivisor("output-dhondt");
+
+    const hareLast = Object.fromEntries(runners.map(({ name }) => [name, 0]));
+    set_time = (t) => {
+        slider.value = t;
+        middle_text.textContent = `t = ${t.toFixed(2)}`;
+
+        runners.forEach(({ set_position, track, speed, name, color, position, note }, i) => {
+            if (playing &&
+                (audioMethod == "dhondt" && Math.floor(t * speed) > Math.floor(position)) ||
+                (audioMethod == "sainte-lague" && Math.round(t * speed) > Math.round(position))
+            ) {
+                playSample(note);
+            }
+            set_position(t * speed);
+            if (hover == name) {
+                hover_track.setAttribute("d", generatePath(speed * t % 1));
+                hover_track.setAttribute("stroke", color);
+                hover_track.setAttribute("stroke-width", "5");
+            }
+        });
+        if (hover == null) {
+            hover_track.setAttribute("stroke-width", "0");
+        }
+
+        function updateOutputDivisor(id, x) {
+            const output = document.getElementById(id);
+            let total = 0;
+            runners.forEach(({ color, speed, name }, i) => {
+                const rounds = Math.floor(speed * t + x);
+                output.querySelector(`.${name} .number`).textContent = rounds;
+            });
+            output.querySelector(".total .number").textContent = total;
+        }
+        updateOutputDivisor("output-sainte-lague", 0.5);
+        updateOutputDivisor("output-dhondt", 0);
+
+        function updateHare() {
+            const total = runners.map(({ speed }) => Math.floor(speed * t)).reduce((a, b) => a + b, 0);
+            const missing = Math.floor(t - total);
+            const cloned_runners = [...runners];
+            cloned_runners.sort((a, b) => (b.speed * t % 1) - (a.speed * t % 1));
+            cloned_runners.forEach(({ color, speed, name, note }, i) => {
+                const element = document.getElementById(`hare-${name}`);
+                element.style.top = `${getHareY(i)}px`;
+                const extra_seats = i < missing ? 1 : 0;
+                const base_seats = Math.floor(speed * t);
+                element.querySelector(".base-seats").textContent = base_seats;
+                element.querySelector(".extra-seats").textContent = extra_seats;
+                element.querySelector(".bar").style.width = `${(speed * t % 1 * 100)}%`;
+                element.querySelector(".bar").style.height = `${i < missing ? 8 : 2}px`;
+
+                if (audioMethod == "hare" && playing) {
+                    if (hareLast[name] < base_seats + extra_seats) {
+                        playSample(note);
+                    } else if (hareLast[name] > base_seats + extra_seats) {
+                        console.log("loose")
+                        playSample(note - 1);
+                    }
+                }
+                hareLast[name] = base_seats + extra_seats;
+            });
+        }
+        updateHare()
+
+    };
+
+    window.onkeydown = (event) => {
+        if (event.key === "ArrowRight") {
+            slider.value = Math.min(parseFloat(slider.value) + 1, parseFloat(slider.max));
+            set_time(Math.round(parseFloat(slider.value)));
+        } else if (event.key === "ArrowLeft") {
+            slider.value = Math.max(parseFloat(slider.value) - 1, parseFloat(slider.min));
+            set_time(Math.round(parseFloat(slider.value)));
+        } else if (event.key === "ArrowUp") {
+            speed.value = Math.min(parseFloat(speed.value) + 0.2, parseFloat(speed.max));
+        } else if (event.key === "ArrowDown") {
+            speed.value = Math.max(parseFloat(speed.value) - 0.2, parseFloat(speed.min));
+        } else if (event.key === " ") {
+            play.click();
+            event.preventDefault();
+        }
+    };
+
+    slider.addEventListener("input", (event) => {
+        let time = event.target.value;
+        set_time(parseFloat(time));
+    });
+    set_time(parseFloat(slider.value));
+
+    const play = document.getElementById("play");
+
+    let lastTime = null;
+    function playAnimation() {
+        if (!playing) return;
+        const currentTime = performance.now();
+        const delta = (currentTime - lastTime) / 1000; // seconds
+        lastTime = currentTime;
+
+        let time = parseFloat(slider.value);
+        let max = parseFloat(slider.max);
+        time += delta * (Math.pow(parseFloat(speed.value), 2) / 2); // speed of slider movement
+        if (time > max) {
+            playing = false;
+            play.value = playing ? "pause" : "start";
+            return;
+        }
+        set_time(time);
+
+        requestAnimationFrame(playAnimation);
+    }
+
+    play.addEventListener("click", () => {
+        initializeAudioCtx();
+        playing = !playing;
+        play.value = playing ? "pause" : "start";
+
+        if (playing) {
+            lastTime = performance.now();
+            playAnimation();
+        }
+    });
+
+    document.querySelectorAll(".party").forEach((el) => {
+        el.addEventListener("click", () => {
+            const party = el.classList[0];
+            const idx = Array.from(document.styleSheets[0].cssRules).findIndex((rule) => rule.selectorText === `.${party}`);
+            if (idx !== -1) document.styleSheets[0].deleteRule(idx);
+            else document.styleSheets[0].insertRule(`.${party} { opacity: 0.1; }`, 0);
+        });
+    });
+</script>
 
 <script>
     // sound taken from https://freesound.org/people/pjcohen/sounds/381477/
