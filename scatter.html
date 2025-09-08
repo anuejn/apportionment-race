@@ -96,19 +96,34 @@
 <script>
     const colors = {
         "CDU": "#161A1D",
+        "CDU / CSU": "#777",
         "AfD": "#009EE0",
         "SPD": "#E3010F",
         "GRÜNE": "#64A12D",
         "DIE LINKE": "#BE3075",
         "CSU": "#777",
         "SSW": 'rgb(0, 48, 114)',
+
+        "Mandat Nicht Zugeteilt": "#ff6384",
+        "Mandat Zugeteilt": "#4bc0c0",
     }
 </script>
 
 <script>
     changequote([[[[[[,]]]]]])
+    const data_str = `include(btw2025.csv)`;
+    const [heading_line, ...lines] = data_str.split("\n");
+    const headings = heading_line.split("\t");
+    const parseNumber = s => {
+        const f = parseFloat(s);
+        return isNaN(f) ? s : f;
+    };
+    const data = lines.map(line => {
+        const cols = line.split("\t");
+        return Object.fromEntries(headings.map((h, i) => [h, parseNumber(cols[i])]));
+    });
 
-    const data = include(btw_2025_strukturdaten_ergebnisse.json);
+
     const ctx = document.getElementById('chart');
 
     const axis = ["x", "y", "z"]
