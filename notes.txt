@@ -1,0 +1,2 @@
+I want:
+- colormaped numeric values on z axis
