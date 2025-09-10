@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+
+<title>BTW2025 Scatter Plot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<table>
+
+</table>
+
+<style>
+    .top {
+        writing-mode: vertical-rl;
+    }
+
+    th {
+        text-align: right;
+        width: 880px;
+        white-space: nowrap;
+    }
+</style>
+
+<script>
+    changequote([[[[[[,]]]]]])
+    const data_str = `include(btw2025.csv)`;
+    const [heading_line, ...lines] = data_str.split("\n");
+    const headings = heading_line.split("\t");
+    const parseNumber = s => {
+        const f = parseFloat(s);
+        return isNaN(f) ? s : f;
+    };
+
+    const data = Object.fromEntries(headings.map(heading => [heading, []]));
+    lines.forEach(line => {
+        const cols = line.split("\t");
+        Object.entries(data).forEach(([heading, values], i) => {
+            values.push(parseNumber(cols[i]));
+        });
+    });
+    const non_numeric = headings.filter(h => typeof data[h][0] == "string");
+    non_numeric.forEach(x => {
+        delete data[x];
+    });
+
+    function corr(a, b) {
+        const n = a.length;
+        const meanA = a.reduce((x, y) => x + y, 0) / n;
+        const meanB = b.reduce((x, y) => x + y, 0) / n;
+        const cov = a.map((x, i) => (x - meanA) * (b[i] - meanB)).reduce((x, y) => x + y, 0);
+        const stdA = Math.sqrt(a.map(x => (x - meanA) ** 2).reduce((x, y) => x + y, 0));
+        const stdB = Math.sqrt(b.map(x => (x - meanB) ** 2).reduce((x, y) => x + y, 0));
+        return cov / (stdA * stdB);
+    }
+
+    function slugify(s) {
+        let slug = s.replace(/[^a-z\s0-9\-]/gi, "").replace(/[\s]/g, "-").toLowerCase();
+        slug = slug.replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue");
+        while (slug.includes("--")) {
+            slug = slug.replace(/--/g, "-");
+        }
+        while (slug.endsWith("-")) {
+            slug = slug.slice(0, -1);
+        }
+        return slug;
+    }
+
+    table_content = `<tr><th></th>${Object.keys(data).map(h => `<th class="top highlight-v">${h}</th>`).join("")}</tr>`;
+    Object.keys(data).forEach(h1 => {
+        table_content += `<tr><th class="highlight-h">${h1}</th>`;
+        Object.keys(data).forEach(h2 => {
+            if (h1 == h2) {
+                table_content += `<td title="${h1}\n${h2}" class="h-${slugify(h1)} v-${slugify(h2)}"></td>`;
+            } else {
+                const r = corr(data[h1], data[h2]);
+                const color = r < 0 ? `rgba(255, 0, 0, ${Math.abs(r)})` : `rgba(0, 255, 0, ${Math.abs(r)})`;
+                table_content += `
+                    <td style="background-color: ${color};" title="${h1}\n${h2}" class="h-${slugify(h1)} v-${slugify(h2)}" onclick="window.location = 'scatter_built.html?x=${encodeURIComponent(h1)}&y=${encodeURIComponent(h2)}'">
+                        ${r.toFixed(2)}
+                    </td>`;
+            }
+        });
+        table_content += `</tr>`;
+    });
+    document.querySelector("table").innerHTML = table_content;
+
+
+    let highlight = [];
+    let highlight_stylesheet = new CSSStyleSheet();
+    document.adoptedStyleSheets.push(highlight_stylesheet);
+    ["h", "v"].forEach(direction => {
+        document.querySelectorAll(`.highlight-${direction}`).forEach(el => {
+            el.addEventListener("click", () => {
+                const us = `${direction}-${slugify(el.textContent)}`;
+                if (highlight.includes(us)) {
+                    highlight = highlight.filter(h => h !== us);
+                } else {
+                    highlight.push(us);
+                }
+                if (highlight.length == 0) {
+                    highlight_stylesheet.replaceSync(``);
+                } else {
+                    const not_str = highlight.map(h => `:not(.${h})`).join("");
+                    console.log(`td${not_str} {background-color: white !important;}`);
+                    highlight_stylesheet.replaceSync(`td${not_str} {background-color: white !important;}`);
+                }
+            });
+        });
+    })
+
+</script>
